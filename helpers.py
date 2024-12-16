@@ -6,11 +6,11 @@ from scipy import stats as scipy_stats
 import cv2
 
 
-def get_ddsm_table():
-    ddsm_files = ["./DDSM/mass_case_description_test_set.csv",
-    "./DDSM/calc_case_description_test_set.csv",
-    "./DDSM/calc_case_description_train_set.csv",
-    "./DDSM/mass_case_description_train_set.csv"]
+def get_ddsm_table(base_path):
+    ddsm_files = [base_path+"/mass_case_description_test_set.csv",
+    base_path+"/calc_case_description_test_set.csv",
+    base_path+"/calc_case_description_train_set.csv",
+    base_path+"/mass_case_description_train_set.csv"]
 
     ddsm_dfs = []
     for f in ddsm_files:
@@ -18,17 +18,26 @@ def get_ddsm_table():
     ddsm_df = pd.concat(ddsm_dfs)
     ddsm_df['image_prefix'] = ddsm_df['image file path'].apply(lambda x: x.split('/')[0])
 
-    local_files = [entry.name for entry in os.scandir("./DDSM/") if entry.is_dir()]
+    local_files = []
+    try:
+        with os.scandir(base_path) as entries:
+            for entry in entries:
+                if entry.is_dir():
+                    local_files.append(entry.name)
+    except Exception:
+        pass
+
+    # local_files = [entry.name for entry in os.scandir("./DDSM/") if entry.is_dir()]
     ddsm_df = ddsm_df[ddsm_df['image_prefix'].isin(local_files)]
     ddsm_df = ddsm_df[ddsm_df['image_prefix'].map(ddsm_df['image_prefix'].value_counts()) == 1]
-    file_names = [os.listdir("./DDSM/"+ddsm_df.iloc[i]['image_prefix'])[0] for i in range(len(ddsm_df))]
-    ddsm_df['full_path'] = ["./DDSM/"+ddsm_df.iloc[i]['image_prefix']+"/"+file_names[i] for i in range(len(file_names))]
+    file_names = [os.listdir(os.path.join(base_path, ddsm_df.iloc[i]['image_prefix']))[0] for i in range(len(ddsm_df))]
+    ddsm_df['full_path'] = [os.path.join(base_path, ddsm_df.iloc[i]['image_prefix'], file_names[i]) for i in range(len(file_names))]
     ddsm_df['Manufacturer'] = 'DDSM'
 
     return ddsm_df
 
-def get_INBreast_table():
-    xlsdata = pd.read_csv('./INbreast Release 1.0/INBreast.csv', sep=';')
+def get_INBreast_table(base_path):
+    xlsdata = pd.read_csv(os.path.join(base_path,'INbreast.csv'), sep=';')
     biradsclass = xlsdata['Bi-Rads'].values
     biradsclassFilename = xlsdata['File Name'].values
     date = xlsdata['Acquisition date'].values
@@ -37,7 +46,7 @@ def get_INBreast_table():
     biradsclass = biradsclass[sorted_indices]
     date = date[sorted_indices]
 
-    dicom_files = [f for f in os.listdir('./INbreast Release 1.0/AllDICOMs/') if f.endswith('.dcm')]
+    dicom_files = [f for f in os.listdir(os.path.join(base_path,'AllDICOMs')) if f.endswith('.dcm')]
     nn = len(dicom_files)
     INbreast = np.empty((nn, 8), dtype=object)
 
@@ -68,18 +77,26 @@ def get_INBreast_table():
     xlsdata['File Name'] = xlsdata['File Name'].apply(str)
     INbreast_cases = INbreast_cases.merge(xlsdata[['File Name', 'ACR']], how='inner', left_on='file_name_prefix', right_on='File Name')
     INbreast_cases.drop(columns=['file_name_prefix'], inplace=True)
-    INbreast_cases['full_path'] = ["./INBreast Release 1.0/AllDICOMs/"+INbreast_cases.iloc[i]['file_name'] for i in range(len(INbreast_cases))]
+    INbreast_cases['full_path'] = [os.path.join(base_path,"AllDICOMs",INbreast_cases.iloc[i]['file_name']) for i in range(len(INbreast_cases))]
     INbreast_cases['Manufacturer'] = 'Siemens_INBreast'
 
     return INbreast_cases
 
-def get_VinDR_table():
-    vinDR_files = ['./VinDr/metadata.csv', './VinDr/breast-level_annotations.csv', './VinDr/finding_annotations.csv']
+def get_VinDR_table(base_path):
+    vinDR_files = [base_path+'/metadata.csv', base_path+'/breast-level_annotations.csv', base_path+'/finding_annotations.csv']
     metadata = pd.read_csv(vinDR_files[0])
     breast_annotations = pd.read_csv(vinDR_files[1])
     finding_annotations = pd.read_csv(vinDR_files[2])
 
-    local_files = [entry.name for entry in os.scandir("./VinDR/") if entry.is_dir()]
+    local_files = []
+    try:
+        with os.scandir(base_path) as entries:
+            for entry in entries:
+                if entry.is_dir():
+                    local_files.append(entry.name)
+    except Exception:
+        pass
+    # local_files = [entry.name for entry in os.scandir("./VinDR/") if entry.is_dir()]
     breast_annotations = breast_annotations[breast_annotations['study_id'].isin(local_files)]
     finding_annotations = finding_annotations[finding_annotations['study_id'].isin(local_files)]
     annotations = breast_annotations.merge(finding_annotations, how='inner', on=['study_id', 'series_id', 'image_id'], suffixes=('_b', '_f'))
@@ -99,12 +116,23 @@ def get_VinDR_table():
                  'breast_density_b': 'breast_density',
                  'split_b': 'split'})
     
-    vindr_df['full_path'] = ["./VinDr/"+vindr_df.iloc[i]['study_id']+'/'+vindr_df.iloc[i]['image_id']+'.dicom' for i in range(len(vindr_df))]
+    vindr_df['full_path'] = [os.path.join(base_path,vindr_df.iloc[i]['study_id'],vindr_df.iloc[i]['image_id']+'.dicom') for i in range(len(vindr_df))]
 
     return vindr_df
 
+def normalize_img(image):
+    image = image.astype(np.float32)
+    nonzero_pixels = image[image > 0]
+    min_val = np.min(nonzero_pixels)
+    max_val = np.max(nonzero_pixels)
+    
+    normalized_image = (image - min_val) / (max_val - min_val)
+    normalized_image[image == 0] = 0  # Keep zero pixels as zero
+    return normalized_image
+
 def run_intensity_functions(img):
 
+    img = normalize_img(img)
     mean = np.mean(img[img>0.])
     max = float(np.max(img))
     min = float(np.min(img[img>0.])) 
