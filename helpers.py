@@ -4,7 +4,7 @@ import numpy as np
 from skimage import feature as skfeat
 from scipy import stats as scipy_stats
 import cv2
-
+from skimage.restoration import denoise_wavelet
 
 def get_ddsm_table(base_path):
     ddsm_files = [base_path+"/mass_case_description_test_set.csv",
@@ -217,6 +217,7 @@ def run_glcm_features(img):
     return glcm_dict
 
 def get_master_df(vindr_df, ddsm_df, INbreast_df):
+
     ddsm = ddsm_df[['left or right breast', 'image view', 'breast density', 'Manufacturer', 'full_path']].copy()
     ib = INbreast_df[['Left or Right Breast', 'Image View', 'ACR', 'Manufacturer', 'full_path']].copy()
 
@@ -226,3 +227,48 @@ def get_master_df(vindr_df, ddsm_df, INbreast_df):
 
     master_df = pd.concat([vin, ddsm, ib])
     return master_df
+
+def adjust_intensity(image, increase=True, strength=50): # mode = 'increase'/'decrease' 
+    if(increase):
+        return np.clip(image + strength, 0, 65535) 
+    else:
+        return np.clip(image - strength, 0, 65535)
+
+def gamma_correction(image, gamma= 1.0):
+    normalized = normalize_img(image)
+    corrected = np.power(normalized, gamma)
+    return corrected
+
+def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+    return clahe.apply(image)
+
+def unsharp_masking(image, blur_kernel=(5, 5), alpha=1.5):
+    blurred = cv2.GaussianBlur(image, blur_kernel, 0)
+    return np.clip(image + alpha * (image - blurred), 0, 65535).astype(np.uint16)
+
+def wavelet_denoising(image):
+    return denoise_wavelet(image, rescale_sigma=True)
+
+def process_image(img, vendor):
+    if(vendor == 'Planmed'):
+        # img = adjust_intensity(img, increase=False, strength=10)
+        # img = unsharp_masking(img)
+        img = gamma_correction(img, gamma=1.05)
+
+    elif(vendor == 'SIEMENS'):
+        # img = adjust_intensity(img, increase=False, strength=10)
+        # img = wavelet_denoising(img)
+        img = gamma_correction(img, gamma=0.95)
+    
+    elif(vendor == 'Siemens_INBreast'):
+        # img = wavelet_denoising(img)
+        img = gamma_correction(img, gamma=0.95)
+    
+    elif(vendor == 'DDSM'):
+        img = adjust_intensity(img, increase=True, strength=200)
+    
+    elif(vendor in ['IMS s.r.l', 'IMS GIOTTO S.p.A.']):
+        img = unsharp_masking(img)
+
+    return img
