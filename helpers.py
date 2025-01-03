@@ -5,6 +5,9 @@ from skimage import feature as skfeat
 from scipy import stats as scipy_stats
 import cv2
 from skimage.restoration import denoise_wavelet
+from skimage.exposure import match_histograms
+REF_IMAGE = np.load('ref_image.npy')
+
 
 def get_ddsm_table(base_path):
     ddsm_files = [base_path+"/mass_case_description_test_set.csv",
@@ -228,20 +231,21 @@ def get_master_df(vindr_df, ddsm_df, INbreast_df):
     master_df = pd.concat([vin, ddsm, ib])
     return master_df
 
-def adjust_intensity(image, increase=True, strength=50): # mode = 'increase'/'decrease' 
+def adjust_intensity(image, increase=True, strength=50):
     if(increase):
         return np.clip(image + strength, 0, 65535) 
     else:
         return np.clip(image - strength, 0, 65535)
 
 def gamma_correction(image, gamma= 1.0):
-    normalized = normalize_img(image)
+    normalized = image / 65535.0
     corrected = np.power(normalized, gamma)
-    return corrected
+    corrected = np.clip(corrected * 65535, 0, 65535).astype(np.uint16)
 
-def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
+def apply_clahe(image, clip_limit=4.0, tile_grid_size=(3, 3)):
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
-    return clahe.apply(image)
+    enhanced = clahe.apply(image)
+    return enhanced
 
 def unsharp_masking(image, blur_kernel=(5, 5), alpha=1.5):
     blurred = cv2.GaussianBlur(image, blur_kernel, 0)
@@ -250,25 +254,61 @@ def unsharp_masking(image, blur_kernel=(5, 5), alpha=1.5):
 def wavelet_denoising(image):
     return denoise_wavelet(image, rescale_sigma=True)
 
+def bilateral_filter(image, d=9, sigma_color=50, sigma_space=50):
+    image_float = image.astype(np.float32)
+    filtered = cv2.bilateralFilter(image_float, d, sigma_color, sigma_space)
+    return np.clip(filtered, 0, 65535).astype(np.uint16)
+
+def match_intensity(image):
+    return match_histograms(image,REF_IMAGE)
+
+def denoise_image(image):
+    image_8bit = np.uint8(image / 256)
+    denoised_image_8bit = cv2.fastNlMeansDenoising(image_8bit, None, 10, 7, 21)
+    denoised_image_16bit = np.uint16(denoised_image_8bit) * 256
+    return denoised_image_16bit
+
 def process_image(img, vendor):
+    # print(vendor)
     if(vendor == 'Planmed'):
-        # img = adjust_intensity(img, increase=False, strength=10)
-        # img = unsharp_masking(img)
-        img = gamma_correction(img, gamma=1.05)
+        # img = process_image_with_contour(img)
+        img = 65535 - img
+        img = apply_clahe(img)
+        img = match_intensity(img)
+        img = denoise_image(img)
+        # img = adjust_intensity(img, increase=False, strength=10000)
+        # img = bilateral_filter(img, sigma_color=100, sigma_space=100)
+        # img = wavelet_denoising(img)
 
     elif(vendor == 'SIEMENS'):
-        # img = adjust_intensity(img, increase=False, strength=10)
-        # img = wavelet_denoising(img)
-        img = gamma_correction(img, gamma=0.95)
+        img = apply_clahe(img)
+        img = match_intensity(img)
+        img = denoise_image(img)
+        # img = gamma_correction(img, gamma=1.05)
+        # img = unsharp_masking(img, alpha=1.2)
+        # img = bilateral_filter(img)
     
     elif(vendor == 'Siemens_INBreast'):
+        img = apply_clahe(img)
+        img = match_intensity(img)
+        img = denoise_image(img)
+        # img = adjust_intensity(img, increase=False, strength=10000)
+        # img = gamma_correction(img, gamma=0.9)
         # img = wavelet_denoising(img)
-        img = gamma_correction(img, gamma=0.95)
     
     elif(vendor == 'DDSM'):
-        img = adjust_intensity(img, increase=True, strength=200)
+        img = apply_clahe(img)
+        img = match_intensity(img)
+        img = denoise_image(img)
+        # img = adjust_intensity(img, increase=True, strength=10000)
+        # img = wavelet_denoising(img)
     
-    elif(vendor in ['IMS s.r.l', 'IMS GIOTTO S.p.A.']):
-        img = unsharp_masking(img)
+    elif(vendor in ['IMS s.r.l', 'IMS GIOTTO S.p.A.', 'IMS']):
+        img = apply_clahe(img, clip_limit=8.0, tile_grid_size=(3, 3))
+        img = match_intensity(img)
+        img = denoise_image(img)
+        # img = adjust_intensity(img, increase=True, strength=10000)
+        # img = unsharp_masking(img)
+        # img = gamma_correction(img, gamma=1.05)
 
     return img
