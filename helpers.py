@@ -241,10 +241,13 @@ def gamma_correction(image, gamma= 1.0):
     normalized = image / 65535.0
     corrected = np.power(normalized, gamma)
     corrected = np.clip(corrected * 65535, 0, 65535).astype(np.uint16)
+    return corrected
 
 def apply_clahe(image, clip_limit=4.0, tile_grid_size=(3, 3)):
+    zero_mask = image == 0
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
     enhanced = clahe.apply(image)
+    enhanced[zero_mask] = 0
     return enhanced
 
 def unsharp_masking(image, blur_kernel=(5, 5), alpha=1.5):
@@ -272,41 +275,50 @@ def process_image(img, vendor):
     # print(vendor)
     if(vendor == 'Planmed'):
         # img = process_image_with_contour(img)
-        img = 65535 - img
-        img = apply_clahe(img)
-        img = match_intensity(img)
-        img = denoise_image(img)
+        img = 65535-img
+        img = img - 55535
+        img = img/3.44
+        img = np.uint16(img)
+        # img = apply_clahe(img)
+        # img = match_intensity(img)
+        # img = denoise_image(img)
         # img = adjust_intensity(img, increase=False, strength=10000)
         # img = bilateral_filter(img, sigma_color=100, sigma_space=100)
         # img = wavelet_denoising(img)
 
     elif(vendor == 'SIEMENS'):
         img = apply_clahe(img)
-        img = match_intensity(img)
-        img = denoise_image(img)
+        # img = match_intensity(img)
+        # img = denoise_image(img)
+        # img = wavelet_denoising(img)
         # img = gamma_correction(img, gamma=1.05)
         # img = unsharp_masking(img, alpha=1.2)
         # img = bilateral_filter(img)
     
     elif(vendor == 'Siemens_INBreast'):
         img = apply_clahe(img)
-        img = match_intensity(img)
-        img = denoise_image(img)
+        # img = match_intensity(img)
         # img = adjust_intensity(img, increase=False, strength=10000)
         # img = gamma_correction(img, gamma=0.9)
         # img = wavelet_denoising(img)
     
     elif(vendor == 'DDSM'):
+        img = img/23.948
+        img = np.uint16(img)
         img = apply_clahe(img)
-        img = match_intensity(img)
-        img = denoise_image(img)
+        # img = match_intensity(img)
         # img = adjust_intensity(img, increase=True, strength=10000)
         # img = wavelet_denoising(img)
     
     elif(vendor in ['IMS s.r.l', 'IMS GIOTTO S.p.A.', 'IMS']):
+        _, thresholded = cv2.threshold(img, 0, 65535, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        img = cv2.bitwise_and(img, img, mask=thresholded.astype(np.uint8))
+        img = np.where(thresholded == 0, 0, img)
+        img = img/6.601
+        img = np.uint16(img)
         img = apply_clahe(img, clip_limit=8.0, tile_grid_size=(3, 3))
-        img = match_intensity(img)
-        img = denoise_image(img)
+        # img = match_intensity(img)
+        # img = wavelet_denoising(img)
         # img = adjust_intensity(img, increase=True, strength=10000)
         # img = unsharp_masking(img)
         # img = gamma_correction(img, gamma=1.05)
