@@ -274,7 +274,6 @@ def denoise_image(image):
 def process_image(img, vendor):
     # print(vendor)
     if(vendor == 'Planmed'):
-        # img = process_image_with_contour(img)
         img = 65535-img
         img = img - 55535
         img = img/3.44
@@ -287,6 +286,7 @@ def process_image(img, vendor):
         # img = wavelet_denoising(img)
 
     elif(vendor == 'SIEMENS'):
+        # 1==1
         img = apply_clahe(img)
         # img = match_intensity(img)
         # img = denoise_image(img)
@@ -296,6 +296,7 @@ def process_image(img, vendor):
         # img = bilateral_filter(img)
     
     elif(vendor == 'Siemens_INBreast'):
+        # 1==1
         img = apply_clahe(img)
         # img = match_intensity(img)
         # img = adjust_intensity(img, increase=False, strength=10000)
