@@ -311,7 +311,7 @@ def process_image(img, vendor):
         # img = adjust_intensity(img, increase=True, strength=10000)
         # img = wavelet_denoising(img)
     
-    elif(vendor in ['IMS s.r.l', 'IMS GIOTTO S.p.A.', 'IMS']):
+    elif(vendor in ['IMS s.r.l.', 'IMS GIOTTO S.p.A.', 'IMS']):
         _, thresholded = cv2.threshold(img, 0, 65535, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         img = cv2.bitwise_and(img, img, mask=thresholded.astype(np.uint8))
         img = np.where(thresholded == 0, 0, img)

@@ -40,46 +40,46 @@ class BaselineBreastModel(nn.Module):
         self.all_views_max_pool = layers.SimpleMaxPool()
         self.all_views_avg_pool = layers.SimpleAvgPool()
 
-        self.fc1 = nn.Linear(256 * 4 * 4, 256 * 4)
+        self.fc1 = nn.Linear(256 * 8 * 4, 256 * 4)
         self.fc2 = nn.Linear(256 * 4, 4)
 
         self.gaussian_noise_layer = layers.SimpleGaussianNoise(gaussian_noise_std, device='cpu')
-        self.dropout = nn.Dropout(p=1 - nodropout_probability)
+        self.dropout = nn.Dropout(p=0.2)
 
     def forward(self, x):
         x = self.gaussian_noise_layer(x)
 
         # first conv sequence
-        x = self.conv_layer_dict["conv1"](x) # 2000x2000x1 -> 999x999x32
+        x = self.conv_layer_dict["conv1"](x) # 2600x2000x1 -> 1300x1000x32
 
         # second conv sequence
-        x = self.all_views_max_pool(x, stride=(3, 3)) # 999x999x32 -> 333x333x32
-        x = self.conv_layer_dict["conv2a"](x) # 333x333x32 -> 166x166x64
-        x = self.conv_layer_dict["conv2b"](x) # 166x166x64 -> 164x164x64
-        x = self.conv_layer_dict["conv2c"](x) # 164x164x64 -> 162x162x64
+        x = self.all_views_max_pool(x, stride=(3, 3)) # 1300x1000x32 -> 433x333x32
+        x = self.conv_layer_dict["conv2a"](x) # 433x333x32 -> 216x166x64
+        x = self.conv_layer_dict["conv2b"](x) # 216x166x64 -> 214x164x64
+        x = self.conv_layer_dict["conv2c"](x) # 214x164x64 -> 212x162x64
 
         # third conv sequence
-        x = self.all_views_max_pool(x, stride=(2, 2)) # 162x162x64 -> 81x81x64
-        x = self.conv_layer_dict["conv3a"](x) # 81x81x64 -> 79x79x128
-        x = self.conv_layer_dict["conv3b"](x) # 79x79x128 -> 77x77x128
-        x = self.conv_layer_dict["conv3c"](x) # 77x77x128 -> 75x75x128
+        x = self.all_views_max_pool(x, stride=(2, 2)) # 212x162x64 -> 106x81x64
+        x = self.conv_layer_dict["conv3a"](x) # 106x81x64 -> 104x79x128
+        x = self.conv_layer_dict["conv3b"](x) # 104x79x128 -> 102x77x128
+        x = self.conv_layer_dict["conv3c"](x) # 102x77x128 -> 100x75x128
 
         # WARNING: This is technically correct, but not robust to model architecture changes.
         # x = self.all_views_pad(x, pad=(0, 1, 0, 0))
 
         # fourth conv sequence
-        x = self.all_views_max_pool(x, stride=(2, 2)) # 75x75x128 -> 37x37x128
-        x = self.conv_layer_dict["conv4a"](x) # 37x37x128 -> 35x35x128
-        x = self.conv_layer_dict["conv4b"](x) # 35x35x128 -> 33x33x128
-        x = self.conv_layer_dict["conv4c"](x) # 33x33x128 -> 31x31x128
+        x = self.all_views_max_pool(x, stride=(2, 2)) # 100x75x128 -> 50x37x128
+        x = self.conv_layer_dict["conv4a"](x) # 50x37x128 -> 48x35x128
+        x = self.conv_layer_dict["conv4b"](x) # 48x35x128 -> 46x33x128
+        x = self.conv_layer_dict["conv4c"](x) # 46x33x128 -> 44x31x128
 
         # fifth conv sequence
-        x = self.all_views_max_pool(x, stride=(2, 2)) # 31x31x128 -> 15x15x128
-        x = self.conv_layer_dict["conv5a"](x) # 15x15x128 -> 13x13x256
-        x = self.conv_layer_dict["conv5b"](x) # 13x13x256 -> 11x11x256
-        x = self.conv_layer_dict["conv5c"](x) # 11x11x256 -> 9x9x256
+        x = self.all_views_max_pool(x, stride=(2, 2)) # 44x31x128 -> 22x15x128
+        x = self.conv_layer_dict["conv5a"](x) # 22x15x128 -> 20x13x256
+        x = self.conv_layer_dict["conv5b"](x) # 20x13x256 -> 18x11x256
+        x = self.conv_layer_dict["conv5c"](x) # 18x11x256 -> 16x9x256
         # x = self.all_views_avg_pool(x) 
-        x = self.all_views_max_pool(x, stride=(2, 2)) # 9x9x256 -> 4x4x256
+        x = self.all_views_max_pool(x, stride=(2, 2)) # 16x9x256 -> 8x4x256
 
         # Pool, flatten, and fully connected layers
         # x = torch.cat([
@@ -88,8 +88,9 @@ class BaselineBreastModel(nn.Module):
         #     x["L-MLO"],
         #     x["R-MLO"],
         # ], dim=1)
+        x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
-        x = self.dropout(x)
+        # x = self.dropout(x)
         x = self.fc2(x)
         x = F.softmax(x, dim=1)
 
