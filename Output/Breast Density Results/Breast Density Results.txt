@@ -1,0 +1,6 @@
+Accuracy pretrained processed images: 79.68%
+F1 score pretrained processed images: 70%
+Accuracy pretrained no processing: 54.35%
+F1 score pretrained no processing: 56.9%
+Accuracy retrained no processing: 76.38%
+F1 score retrained no processing: 66.2%
